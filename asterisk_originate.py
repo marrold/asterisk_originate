@@ -4,13 +4,10 @@ from asterisk_originate import asterisk_originate
 import sys
 import getopt
 
+
 def main():
-
     options = """
-asterisk_originate will generate calls and drop them into a context. It does so by interacting with the Asterisk AMI.
-
-Usage:
-./asterisk_originate.py -H [AMI Host] -p [AMI Port] -u [AMI User] -P [AMI Password] -C [Channel] -c [Context] -I [Caller ID] -E [Extension in Context] -r [priority]
+asterisk_originate will generate calls and drop them into a context or application. It does so by interacting with the Asterisk AMI.
 
 Arguments:
 -h / --help - Display help
@@ -23,6 +20,10 @@ Arguments:
 -I / --callerid [Callerid] - Caller ID to display when ringing channels
 -E / --extension [Extension] - Extension in context
 -r / --priority [Priority] - Priority in context
+-a / --application [Application] - Application to run
+-d / --data [Data] - Data to pass to application
+-t / --timeout [Timeout] - Timeout when originating to context
+-v / --variables [Variables] - Variables to pass to context
     """
 
     # Init vars
@@ -33,20 +34,24 @@ Arguments:
     channels = None
     context = None
     callerid = None
-    extensions = None
+    extension = None
     priority = None
+    application = None
+    data = None
+    timeout = None
+    variables = None
 
     # Get arguments
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hH:p:u:P:C:c:I:E:r:",
+        opts, args = getopt.getopt(sys.argv[1:], "hH:p:u:P:C:c:I:E:r:a:d:t:v:",
                                    ["help", "host=", "port=", "username=", "password=", "channels=",
-                                    "context=", "callerid=", "extension=", "priority="])
+                                    "context=", "callerid=", "extension=", "priority=", "application=", "data=",
+                                    "timeout=", "variables="])
 
     except getopt.GetoptError as err:
         print("Unable to parse arguments: %s" % err)
         print(options)
         sys.exit(1)
-
 
     # Parse Arguments
     for opt, arg in opts:
@@ -68,27 +73,62 @@ Arguments:
         elif opt in ("-I", "--callerid"):
             callerid = arg
         elif opt in ("-E", "--extension"):
-            extensions = arg
+            extension = arg
         elif opt in ("-r", "--priority"):
             priority = arg
+        elif opt in ("-a", "--application"):
+            application = arg
+        elif opt in ("-d", "--data"):
+            data = arg
+        elif opt in ("-t", "--timeout"):
+            timeout = arg
+        elif opt in ("-v", "--variables"):
+            variables = arg
 
-    # Check vars are populated
-    if None not in (ami_host, ami_port, ami_username, ami_password, channels, context, callerid, extensions, priority):
+    # You can only originate to a context OR an application.
+    if context and application:
+        print("Please select either context or application")
+        print(options)
+        sys.exit(1)
+
+    if None not in (ami_host, ami_port, ami_username, ami_password):
 
         # Init the class
         originate = asterisk_originate.asterisk_originate(ami_host, ami_port, ami_username, ami_password)
 
+    else:
+        print("Please supply AMI Parameters")
+        print(options)
+        sys.exit(1)
+
+    # Check if we're originating to a context, and the appropriate vars are populated
+    if context and None not in (channels, callerid, extension, priority):
+
         # Try to originate the calls
-        if originate.originate(channels, extensions, priority, context, callerid):
+        try:
+            originate.originate_context(channels, context, extension, priority, callerid, timeout, variables)
             sys.exit(0)
-        else:
+
+        except asterisk_originate.MissingParams:
+            print("Failed to parse context parameters")
             sys.exit(1)
 
+    # Check if we're originating to an application, and the appropriate vars are populated
+    elif application and None not in (channels, callerid):
+
+        # Try to originate the calls
+        try:
+            originate.originate_application(channels, application, data, callerid)
+
+        except asterisk_originate.MissingParams:
+            print("Failed to parse application parameters")
+            sys.exit(1)
 
     else:
         print("Unable to parse arguments")
         print(options)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
