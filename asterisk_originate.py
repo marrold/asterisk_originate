@@ -38,8 +38,8 @@ Arguments:
     priority = None
     application = None
     data = None
-    timeout = None
-    variables = None
+    timeout = 60
+    variables = ""
 
     # Get arguments
     try:
