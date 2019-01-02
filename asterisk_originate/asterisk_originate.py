@@ -72,7 +72,8 @@ class asterisk_originate:
             Context=context,
             CallerID=callerid,
             Timeout=timeout*1000,
-            Variable=variables)
+            Variable=variables,
+            Async="true")
 
         try:
             self.__ami_client.send_action(action)
@@ -90,7 +91,8 @@ class asterisk_originate:
             Channel=channel,
             CallerID=callerid,
             Application=application,
-            Data=data, )
+            Data=data,
+            Async="true")
 
         try:
             self.__ami_client.send_action(action)
