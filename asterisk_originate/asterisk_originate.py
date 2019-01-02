@@ -3,6 +3,9 @@
 import errno
 from asterisk.ami import SimpleAction, AMIClient
 
+class MissingParams(Exception):
+    pass
+
 class asterisk_originate:
     def __init__(self, ami_host, ami_port, ami_username, ami_password):
 
@@ -59,7 +62,7 @@ class asterisk_originate:
         except Exception as e:
             return(e)
 
-    def _send_originate(self, channel, extension, priority, context, callerid):
+    def _send_originate_context(self, channel, context, extension, priority, callerid, timeout=60, variables=""):
 
         action = SimpleAction(
             'Originate',
@@ -67,7 +70,10 @@ class asterisk_originate:
             Exten=extension,
             Priority=priority,
             Context=context,
-            CallerID=callerid, )
+            CallerID=callerid,
+            Timeout=timeout*1000,
+            Variable=variables,
+            Async="true")
 
         try:
             self.__ami_client.send_action(action)
@@ -78,17 +84,36 @@ class asterisk_originate:
             print("Unable to connect to %s: %s" % (channel, error))
             return False
 
-    def originate(self, channel, extensions, priority, context, callerid):
+    def _send_originate_application(self, channel, application, data, callerid):
 
-        split_extensions = extensions.split("&")
+        action = SimpleAction(
+            'Originate',
+            Channel=channel,
+            CallerID=callerid,
+            Application=application,
+            Data=data,
+            Async="true")
 
-        if None not in (channel, extensions, priority, context, callerid):
+        try:
+            self.__ami_client.send_action(action)
+            return True
+
+        except Exception as e:
+            error = self._handle_ami_exception(e)
+            print("Unable to connect to %s: %s" % (channel, error))
+            return False
+
+    def originate_context(self, channels, context, extension, priority, callerid, timeout=60, variables=""):
+
+        split_channels = channels.split("&")
+
+        if None not in (channels, extension, priority, context, callerid):
 
             if self._login():
 
-                for extension in split_extensions:
+                for channel in split_channels:
 
-                    self._send_originate(channel, extension, priority, context, callerid)
+                    self._send_originate_context(channel, context, extension, priority, callerid, timeout, variables)
 
                 if self._logoff():
 
@@ -98,4 +123,26 @@ class asterisk_originate:
                     return False
 
         else:
-            return False
+            raise MissingParams("Failed to parse application parameters")
+
+    def originate_application(self, channels, application, data, callerid):
+
+        split_channels = channels.split("&")
+
+        if None not in (channels, application, data, callerid):
+
+            if self._login():
+
+                for channel in split_channels:
+
+                    self._send_originate_application(channel, application, data, callerid)
+
+                if self._logoff():
+
+                    return True
+
+                else:
+                    return False
+
+        else:
+            raise MissingParams("Failed to parse originate parameters")
